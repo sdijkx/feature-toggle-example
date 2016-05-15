@@ -27,7 +27,7 @@ public class ServiceApp {
             int port = Integer.parseInt(args[0]);
             ServiceInfo serviceInfo = new ServiceInfo(InetAddress.getLocalHost().getHostAddress(), port);
 
-            ZookeeperClient zookeeperClient = new ZookeeperClient(args[1], "/featuretoggle-example");
+            ZookeeperClient zookeeperClient = new ZookeeperClient(args[1], "featuretoggle-example");
             zookeeperClient.register(serviceInfo.getHost() + ":" + serviceInfo.getPort());
 
             FeatureToggle featureToggle = new FeatureToggle(zookeeperClient);

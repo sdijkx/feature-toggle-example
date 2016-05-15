@@ -25,19 +25,22 @@ public class ZookeeperClient {
     private final CuratorFramework curatorFramework;
     private final String rootZkNode;
 
-    public ZookeeperClient(String zookeeperHost, String rootZkNode) {
+    public ZookeeperClient(String zookeeperHost, String namespace) {
         try {
-            curatorFramework = CuratorFrameworkFactory.newClient(zookeeperHost, new RetryNTimes(3, 100));
+            curatorFramework = CuratorFrameworkFactory
+                    .builder().namespace(namespace)
+                    .retryPolicy(new RetryNTimes(3, 100))
+                    .connectString(zookeeperHost).build();
             curatorFramework.start();
             curatorFramework.blockUntilConnected();
-            this.rootZkNode = rootZkNode;
+            this.rootZkNode = namespace;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }
 
     public void register(String url) throws Exception {
-        String zkNode = geServicesZkNode();
+        String zkNode = getServicesZkNode() + "/_";
         String znodePath = curatorFramework
                 .create()
                 .creatingParentsIfNeeded()
@@ -46,7 +49,7 @@ public class ZookeeperClient {
     }
 
     public List<String> getAllRegisteredServices() throws Exception {
-        String zkNode = rootZkNode + "/services";
+        String zkNode = getServicesZkNode();
         return curatorFramework.getChildren().forPath(zkNode).stream().map(path -> {
             try {
                 return new String(curatorFramework.getData().forPath(ZKPaths.makePath(zkNode, path)));
@@ -60,7 +63,7 @@ public class ZookeeperClient {
 
     public void watchServices(Watcher watcher) {
         try {
-            String zkNode = rootZkNode + "/services";
+            String zkNode = getServicesZkNode();
             curatorFramework.getChildren().usingWatcher(watcher).forPath(zkNode);
         } catch (Exception e) {
             throw new IllegalStateException(e);
@@ -131,12 +134,12 @@ public class ZookeeperClient {
         return curatorFramework.getState() == CuratorFrameworkState.STARTED;
     }
 
-    private String geServicesZkNode() {
-        return rootZkNode + "/services/_";
+    private String getServicesZkNode() {
+        return "/services";
     }
 
     private String getFeatureMapNode() {
-        return rootZkNode + "/features";
+        return "/features";
     }
 
 }

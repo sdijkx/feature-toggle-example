@@ -20,49 +20,28 @@ import static spark.Spark.post;
  */
 public class FrontendApp {
 
-
-
-
     public static void main(String[] args) {
         try {
             //simple zookeeper example
-            ZookeeperClient zookeeperClient = new ZookeeperClient("127.0.0.1:2181", "/featuretoggle-example");
+            ZookeeperClient zookeeperClient = new ZookeeperClient("127.0.0.1:2181", "featuretoggle-example");
 
-            final Map<String, String> featureMap = zookeeperClient.getFeatureMap();
-            featureMap.entrySet().stream().forEach(entry -> {
-                zookeeperClient.watchFeature(new Watcher() {
-                    @Override
-                    public void process(WatchedEvent watchedEvent) {
-                        try {
-                            System.out.println("feature changed " + watchedEvent.getPath());
-                            String value = zookeeperClient.getFeature(entry.getKey());
-                            if (value.equals("0")) {
-                                featureMap.remove(entry.getKey());
-                            } else {
-                                featureMap.put(entry.getKey(), value);
-                            }
-                            zookeeperClient.watchFeature(this, entry.getKey());
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }, entry.getKey());
-            });
-
+            Map<String,String> featureMap = getWatchedFeatureMap(zookeeperClient);
 
             SimpleRestClient simpleClient = new SimpleRestClient(zookeeperClient);
             Gson gson = new Gson();
             port(9090);
 
             get("/registered-servers", (req, res) -> zookeeperClient.getAllRegisteredServices());
-            get("/feature", (req, res) -> zookeeperClient.getFeatureMap(),gson::toJson);
+            get("/feature", (req, res) -> zookeeperClient.getFeatureMap(), gson::toJson);
             post("/feature/:feature", (req, res) -> {
                 zookeeperClient.setFeature(req.params("feature"), req.body());
                 return zookeeperClient.getFeatureMap();
             }, gson::toJson);
             get("/service/order", (req, res) -> simpleClient.get("/order"));
             get("/service/ads", (req, res) -> simpleClient.get("/ads"));
-            get("/", (req, res) -> new ModelAndView(featureMap, "index.mustache"), new MustacheTemplateEngine());
+            get("/", (req, res) ->
+                    new ModelAndView(featureMap, "index.mustache"),
+                    new MustacheTemplateEngine());
 
             //close the client on exit
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { zookeeperClient.close(); }));
@@ -73,5 +52,43 @@ public class FrontendApp {
         }
     }
 
+    private static boolean isEnabledFeature(Map.Entry<String, String> entry) {
+        return entry != null && isEnabledFeature(entry.getValue());
+    }
+    private static boolean isEnabledFeature(String value) {
+        return value != null && value.length()>0 && !"0".equals(value);
+    }
 
+
+
+    private static Map<String,String> getWatchedFeatureMap(ZookeeperClient zookeeperClient) throws Exception {
+        final Map<String, String> map = zookeeperClient.getFeatureMap();
+        final Map<String, String> featureMap = map.entrySet().stream()
+                .filter(FrontendApp::isEnabledFeature)
+                .collect(
+                        Collectors.toConcurrentMap(
+                                entry -> entry.getKey(),
+                                entry -> entry.getValue()
+                        )
+                );
+        map.entrySet().forEach(entry -> {
+            zookeeperClient.watchFeature(new Watcher() {
+                @Override
+                public void process(WatchedEvent watchedEvent) {
+                    try {
+                        String value = zookeeperClient.getFeature(entry.getKey());
+                        if (isEnabledFeature(value)) {
+                            featureMap.put(entry.getKey(), value);
+                        } else if(featureMap.containsKey(entry.getKey())){
+                            featureMap.remove(entry.getKey());
+                        }
+                        zookeeperClient.watchFeature(this, entry.getKey());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }, entry.getKey());
+        });
+        return featureMap;
+    }
 }
