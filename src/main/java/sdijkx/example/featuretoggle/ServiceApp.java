@@ -63,7 +63,7 @@ public class ServiceApp {
     }
 
     public static OrderStatus createOrder() {
-        return new OrderStatus(UUID.randomUUID().toString(), OrderStatus.Status.NEW);
+        return new OrderStatus(UUID.randomUUID().toString(), OrderStatus.Status.CREATED);
     }
 
 }

@@ -4,7 +4,7 @@ package sdijkx.example.featuretoggle.orders;
  * Created by steven on 15-05-16.
  */
 public class OrderStatus {
-    public enum Status { NEW, OPEN, PAYED, TRANSPORT, CLOSED }
+    public enum Status {CREATED, PAYMENT_DUE, PAYMENT_COMPLETED, TRANSPORT, CLOSED }
 
     private final String orderId;
     private final Status status;
